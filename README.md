@@ -13,3 +13,4 @@ The C binary will take command line arguments of the URL, posts or pages, output
 
 - curl and libcurl: <https://ec.haxx.se/install/index.html>
 - glibc (of course...)
+- cJSON: <https://github.com/DaveGamble/cJSON>
