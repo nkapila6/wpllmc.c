@@ -1,16 +1,34 @@
 CC = gcc
-CFLAGS = -Wall -Wextra
+CFLAGS = -Wall -Wextra -I$(SRC_DIR)
 LIBS = -lcurl
-SRCS = wpllm.c logger.c
+
+# dirs
+SRC_DIR = src
+BUILD_DIR = build
 TARGET = wpllm
+
+# srcs
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+
+# .o files
+OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
 all: clean $(TARGET) wpllm-test
 
-$(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) $(SRCS) -o $(TARGET) $(LIBS)
+$(TARGET): $(OBJS)
+	$(CC) $(OBJS) -o $(TARGET) $(LIBS)
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
 wpllm-test: $(TARGET)
-	./wpllm -h
+	rm -rf $(BUILD_DIR)
+	./$(TARGET) -h
 
 clean:
-	rm -f $(TARGET)
+	rm -rf $(BUILD_DIR) $(TARGET)
+
+.PHONY: all clean wpllm-test

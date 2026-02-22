@@ -66,8 +66,12 @@ int main(int argc, char *argv[]) {
   }
 
   printf("Welcome to wpllm.c!\n");
-  // logger();
-  printf("\n entered: %s", url);
-  printf("\nvalue of pages: %d", pages);
-  printf("\nvalue of blog posts: %d", blogs);
+
+  logger(LOG_INFO, "INPUT", "URL entered is %s", url);
+  if ((pages == 1 && blogs == 1) || (pages == 0 && blogs == 0))
+    logger(LOG_INFO, "INPUT", "Parsing both pages and blog posts");
+  else if (pages == 1)
+    logger(LOG_INFO, "INPUT", "Parsing only pages");
+  else if (blogs == 1)
+    logger(LOG_INFO, "INPUT", "Parsing only blog posts");
 }
