@@ -1,3 +1,6 @@
+// 22.02.2026 Nikhil Kapila
+// C file for curl fetch utils
+
 #include "logger.h"
 #include <stdarg.h>
 #include <stdio.h>

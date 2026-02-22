@@ -1,8 +1,11 @@
+#include "cJSON.h"
 #include "logger.h"
+#include "wpllm_utils.h"
 #include <curl/curl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #define USAGE                                                                  \
@@ -16,13 +19,6 @@
   " -h        Show this help message.\n"                                       \
   " -v        Verbose boolean flag, off (quiet) by default.\n"                 \
   "If p and b are not passed, both pages and posts are considered.\n"
-
-int is_url_valid(const char *url) {
-  CURLU *u = curl_url();
-  CURLUcode code = curl_url_set(u, CURLUPART_URL, url, 0);
-  curl_url_cleanup(u);
-  return (code == CURLUE_OK);
-}
 
 int main(int argc, char *argv[]) {
   int opt;
@@ -74,4 +70,16 @@ int main(int argc, char *argv[]) {
     logger(LOG_INFO, "INPUT", "Parsing only pages");
   else if (blogs == 1)
     logger(LOG_INFO, "INPUT", "Parsing only blog posts");
+
+  char *raw_response = make_curl_request(url);
+  if (strcmp(raw_response, "ERROR") == 0) {
+    logger(LOG_ERROR, "CURL",
+           "Either invalid URL or not a Wordpress blog. Cannot perform a "
+           "request using CURL.");
+    exit(EXIT_FAILURE);
+  }
+
+  // parse json
+  cJSON *json = filter_wp_pages(raw_response);
+  free(raw_response); // freeing chunk.data
 }
