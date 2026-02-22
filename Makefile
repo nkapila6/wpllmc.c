@@ -1,12 +1,16 @@
-all: clean wpllm wpllm-test
+CC = gcc
+CFLAGS = -Wall -Wextra
+LIBS = -lcurl
+SRCS = wpllm.c logger.c
+TARGET = wpllm
 
-wpllm: main.c
-	gcc main.c -o wpllm -lcurl
+all: clean $(TARGET) wpllm-test
 
-wpllm-test: wpllm
+$(TARGET): $(SRCS)
+	$(CC) $(CFLAGS) $(SRCS) -o $(TARGET) $(LIBS)
+
+wpllm-test: $(TARGET)
 	./wpllm -h
 
-.PHONY: clean
-
 clean:
-	rm -f wpllm
+	rm -f $(TARGET)
