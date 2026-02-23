@@ -8,6 +8,7 @@
 #include <curl/curl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
 /* Returns 1 if haystack contains needle case-insensitively. */
@@ -234,9 +235,54 @@ cJSON *merge_item_arrays(cJSON *a, cJSON *b) {
   return merged;
 }
 
+ // strip <script> and <div>
+static char *strip_divs_and_scripts(const char *html) {
+  size_t len = strlen(html);
+  char *out = malloc(len + 1);
+  if (!out)
+    return NULL;
+  size_t i = 0, o = 0;
+  while (i < len) {
+    if (i + 7 <= len && strncasecmp(html + i, "<script", 7) == 0) {
+      const char *end = strstr(html + i + 7, "</script>");
+      if (end) {
+        i = (size_t)(end - html) + 9;
+        continue;
+      }
+    }
+    if (i + 4 <= len && strncasecmp(html + i, "<div", 4) == 0) {
+      size_t j = i + 4;
+      while (j < len && html[j] != '>') {
+        if (html[j] == '"' || html[j] == '\'') {
+          char q = html[j++];
+          while (j < len && html[j] != q) j++;
+          if (j < len) j++;
+        } else
+          j++;
+      }
+      if (j < len) {
+        i = j + 1;
+        continue;
+      }
+    }
+    if (i + 6 <= len && strncasecmp(html + i, "</div>", 6) == 0) {
+      i += 6;
+      continue;
+    }
+    out[o++] = html[i++];
+  }
+  out[o] = '\0';
+  return out;
+}
+
 char *html_to_markdown(const char *html) {
   if (!html || !*html)
     return strdup("");
+
+  char *cleaned = strip_divs_and_scripts(html);
+  if (!cleaned)
+    return strdup("");
+  html = cleaned;
 
   char path[sizeof(TMP_TEMPLATE)];
   strncpy(path, TMP_TEMPLATE, sizeof(path) - 1);
@@ -245,6 +291,7 @@ char *html_to_markdown(const char *html) {
   int fd = mkstemp(path);
   if (fd < 0) {
     logger(LOG_ERROR, "MARKDOWN", "mkstemp failed for temp file.");
+    free(cleaned);
     return NULL;
   }
 
@@ -257,6 +304,7 @@ char *html_to_markdown(const char *html) {
     written += (size_t)n;
   }
   close(fd);
+  free(cleaned);
   if (written != len) {
     logger(LOG_ERROR, "MARKDOWN", "Failed to write temp file.");
     unlink(path);
