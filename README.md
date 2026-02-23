@@ -1,5 +1,7 @@
 # wpllm.c
 
+<img src="./wpllm.gif"/>
+
 A C program that generates llm.md for any Wordpress site. Purely human written. :)
 Meant to be used as an extension for my `wp-content-engine` agent that will invoke this tool via a ctypes wrapper (or CLI..?)
 
