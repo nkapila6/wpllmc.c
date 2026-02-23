@@ -64,22 +64,85 @@ int main(int argc, char *argv[]) {
   printf("Welcome to wpllm.c!\n");
 
   logger(LOG_INFO, "INPUT", "URL entered is %s", url);
-  if ((pages == 1 && blogs == 1) || (pages == 0 && blogs == 0))
+  bool both = (pages == blogs); /* neither or both => both */
+  if (both)
     logger(LOG_INFO, "INPUT", "Parsing both pages and blog posts");
-  else if (pages == 1)
+  else if (pages)
     logger(LOG_INFO, "INPUT", "Parsing only pages");
-  else if (blogs == 1)
+  else
     logger(LOG_INFO, "INPUT", "Parsing only blog posts");
 
-  char *raw_response = make_curl_request(url);
-  if (strcmp(raw_response, "ERROR") == 0) {
-    logger(LOG_ERROR, "CURL",
-           "Either invalid URL or not a Wordpress blog. Cannot perform a "
-           "request using CURL.");
+  /*
+   * WordPress exposes a fixed REST path on every site: /wp-json/wp/v2/posts
+   * (and /wp-json/wp/v2/pages). The base URL is the site; the path is standard.
+   */
+  cJSON *json = NULL;
+
+  if (pages && !blogs) {
+    /* Pages only */
+    char *raw = make_curl_request_pages(url);
+    if (strcmp(raw, "ERROR") == 0) {
+      logger(LOG_ERROR, "CURL",
+             "Either invalid URL or not a WordPress site. Request failed.");
+      exit(EXIT_FAILURE);
+    }
+    json = filter_wp_pages(raw);
+    free(raw);
+  } else if (blogs && !pages) {
+    /* Posts only */
+    char *raw = make_curl_request_posts(url);
+    if (strcmp(raw, "ERROR") == 0) {
+      logger(LOG_ERROR, "CURL",
+             "Either invalid URL or not a WordPress site. Request failed.");
+      exit(EXIT_FAILURE);
+    }
+    json = filter_wp_posts(raw);
+    free(raw);
+  } else {
+    /* Both: fetch pages and posts, merge */
+    char *raw_pages = make_curl_request_pages(url);
+    if (strcmp(raw_pages, "ERROR") == 0) {
+      logger(LOG_ERROR, "CURL",
+             "Either invalid URL or not a WordPress site. Request failed.");
+      exit(EXIT_FAILURE);
+    }
+    cJSON *pages_json = filter_wp_pages(raw_pages);
+    free(raw_pages);
+
+    char *raw_posts = make_curl_request_posts(url);
+    cJSON *posts_json = NULL;
+    if (strcmp(raw_posts, "ERROR") != 0) {
+      posts_json = filter_wp_posts(raw_posts);
+      free(raw_posts);
+    } else {
+      logger(LOG_INFO, "CURL", "Posts request failed; including pages only.");
+      posts_json = cJSON_CreateArray();
+    }
+
+    if (!pages_json || !posts_json) {
+      if (pages_json)
+        cJSON_Delete(pages_json);
+      if (posts_json)
+        cJSON_Delete(posts_json);
+      logger(LOG_ERROR, "PARSE", "Failed to parse JSON.");
+      exit(EXIT_FAILURE);
+    }
+    json = merge_item_arrays(pages_json, posts_json);
+    cJSON_Delete(pages_json);
+    cJSON_Delete(posts_json);
+    if (!json) {
+      logger(LOG_ERROR, "PARSE", "Failed to merge results.");
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  if (!json) {
+    logger(LOG_ERROR, "PARSE", "Failed to parse JSON.");
     exit(EXIT_FAILURE);
   }
 
-  // parse json
-  cJSON *json = filter_wp_pages(raw_response);
-  free(raw_response); // freeing chunk.data
+  write_llm_file("llm.md", json);
+  cJSON_Delete(json);
+  printf("Wrote llm.md\n");
+  return EXIT_SUCCESS;
 }
