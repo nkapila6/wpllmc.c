@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 char *make_curl_request(const char *url);
+char *make_curl_request_endpoint(const char *url, const char *endpoint);
 
 int is_url_valid(const char *url);
 

@@ -38,9 +38,8 @@ int is_url_valid(const char *url) {
   return (code == CURLUE_OK);
 }
 
-char *make_curl_request(const char *url) {
+char *make_curl_request_endpoint(const char *url, const char *endpoint) {
   CURL *curl = curl_easy_init();
-
   struct Response chunk = {.data = malloc(1), .size = 0};
   if (!curl) {
     logger(LOG_ERROR, "CURL", "init failed.");
@@ -48,24 +47,21 @@ char *make_curl_request(const char *url) {
     return "ERROR";
   }
 
-  // url/wp-json/wp/v2/pages
-  char wp_url[100];
-  int written = snprintf(wp_url, sizeof(wp_url), "%s/wp-json/wp/v2/pages", url);
-  if (written < 0 || written >= sizeof(wp_url)) {
-    logger(LOG_ERROR, "CURL", "snprintf failed or URL very long.");
+  char wp_url[256];
+  int written = snprintf(wp_url, sizeof(wp_url), "%s/wp-json/wp/v2/%s", url, endpoint);
+  if (written < 0 || (size_t)written >= sizeof(wp_url)) {
+    logger(LOG_ERROR, "CURL", "URL too long.");
     free(chunk.data);
+    curl_easy_cleanup(curl);
     return "ERROR";
   }
 
-  logger(LOG_INFO, "CURL", "The url is %s", wp_url);
+  logger(LOG_INFO, "CURL", "Fetching %s", wp_url);
   curl_easy_setopt(curl, CURLOPT_URL, wp_url);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "wpllm/0.0.1");
-
-  // call back
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 
-  logger(LOG_INFO, "CURL", "Fetching %s", wp_url);
   CURLcode res = curl_easy_perform(curl);
   curl_easy_cleanup(curl);
 
@@ -75,13 +71,16 @@ char *make_curl_request(const char *url) {
     return "ERROR";
   }
 
-  if (res == CURLE_OK) {
-    logger(LOG_INFO, "CURL", "Response success.");
-    logger(LOG_INFO, "CURL", "Received %lu bytes", (unsigned long)chunk.size);
-    return chunk.data;
-  }
+  logger(LOG_INFO, "CURL", "Response success, %lu bytes", (unsigned long)chunk.size);
+  return chunk.data;
+}
 
-  return "ERROR";
+char *make_curl_request_pages(const char *url) {
+  return make_curl_request_endpoint(url, "pages");
+}
+
+char *make_curl_request_posts(const char *url) {
+  return make_curl_request_endpoint(url, "posts");
 }
 
 cJSON *filter_wp_pages(const char *raw_json) {
