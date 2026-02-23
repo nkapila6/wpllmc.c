@@ -81,7 +81,6 @@ char *make_curl_request(const char *url) {
     return chunk.data;
   }
 
-  free(chunk.data);
   return "ERROR";
 }
 
@@ -95,28 +94,38 @@ cJSON *filter_wp_pages(const char *raw_json) {
   cJSON *page = NULL;
   cJSON_ArrayForEach(page, root) {
     cJSON *obj = cJSON_CreateObject();
+    if (!obj) continue;
 
     // we need id, link, title['rendered'], content['rendered']
 
     // id
-    cJSON_AddItemToObject(obj, "id", cJSON_GetObjectItem(page, "id"));
+    cJSON *id = cJSON_GetObjectItem(page, "id");
+    if (id) cJSON_AddItemToObject(obj, "id", cJSON_Duplicate(id, 1));
 
     // link
-    cJSON_AddItemToObject(obj, "link", cJSON_GetObjectItem(page, "link"));
+    cJSON *link = cJSON_GetObjectItem(page, "link");
+    if (link) cJSON_AddItemToObject(obj, "link", cJSON_Duplicate(link, 1));
 
     // title['rendered'], content['rendered']
+    // title
     cJSON *title = cJSON_GetObjectItem(page, "title");
-    cJSON_AddItemToObject(obj, "title", cJSON_GetObjectItem(title, "rendered"));
+    cJSON *title_rendered = title ? cJSON_GetObjectItem(title, "rendered") : NULL;
+    if (title_rendered)
+      cJSON_AddItemToObject(obj, "title", cJSON_Duplicate(title_rendered, 1));
+    else
+      cJSON_AddItemToObject(obj, "title", cJSON_CreateString(""));
 
+    // content
     cJSON *content = cJSON_GetObjectItem(page, "content");
-    cJSON_AddItemToObject(obj, "content",
-                          cJSON_GetObjectItem(content, "rendered"));
+    cJSON *content_rendered = content ? cJSON_GetObjectItem(content, "rendered") : NULL;
+    if (content_rendered)
+      cJSON_AddItemToObject(obj, "content", cJSON_Duplicate(content_rendered, 1));
+    else
+      cJSON_AddItemToObject(obj, "content", cJSON_CreateString(""));
 
     cJSON_AddItemToArray(new, obj);
-    cJSON_Delete(obj);
   }
 
   cJSON_Delete(root);
-
   return new;
 }
