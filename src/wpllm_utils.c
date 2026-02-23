@@ -44,12 +44,19 @@ char *make_curl_request(const char *url) {
   struct Response chunk = {.data = malloc(1), .size = 0};
   if (!curl) {
     logger(LOG_ERROR, "CURL", "init failed.");
+    free(chunk.data);
     return "ERROR";
   }
 
   // url/wp-json/wp/v2/pages
   char wp_url[100];
-  sprintf(wp_url, "%s/wp-json/wp/v2/pages", url);
+  int written = snprintf(wp_url, sizeof(wp_url), "%s/wp-json/wp/v2/pages", url);
+  if (written < 0 || written >= sizeof(wp_url)) {
+    logger(LOG_ERROR, "CURL", "snprintf failed or URL very long.");
+    free(chunk.data);
+    return "ERROR";
+  }
+
   logger(LOG_INFO, "CURL", "The url is %s", wp_url);
   curl_easy_setopt(curl, CURLOPT_URL, wp_url);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "wpllm/0.0.1");
@@ -70,10 +77,12 @@ char *make_curl_request(const char *url) {
 
   if (res == CURLE_OK) {
     logger(LOG_INFO, "CURL", "Response success.");
+    logger(LOG_INFO, "CURL", "Received %lu bytes", (unsigned long)chunk.size);
     return chunk.data;
   }
 
-  logger(LOG_INFO, "CURL", "Received %lu bytes", (unsigned long)chunk.size);
+  free(chunk.data);
+  return "ERROR";
 }
 
 cJSON *filter_wp_pages(const char *raw_json) {
