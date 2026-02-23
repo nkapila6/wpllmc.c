@@ -4,8 +4,8 @@
 #include "wpllm_utils.h"
 #include "cJSON.h"
 #include "logger.h"
-#include <curl/curl.h>
 #include <ctype.h>
+#include <curl/curl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -72,9 +72,14 @@ char *make_curl_request_endpoint(const char *url, const char *endpoint) {
     return "ERROR";
   }
 
+  // strip trailing slash so we don't get double slash in path
+  size_t url_len = strlen(url);
+  if (url_len > 0 && url[url_len - 1] == '/')
+    url_len--;
+
   char wp_url[256];
-  int written =
-      snprintf(wp_url, sizeof(wp_url), "%s/wp-json/wp/v2/%s", url, endpoint);
+  int written = snprintf(wp_url, sizeof(wp_url), "%.*s/wp-json/wp/v2/%s",
+                         (int)url_len, url, endpoint);
   if (written < 0 || (size_t)written >= sizeof(wp_url)) {
     logger(LOG_ERROR, "CURL", "URL too long.");
     free(chunk.data);
@@ -84,15 +89,33 @@ char *make_curl_request_endpoint(const char *url, const char *endpoint) {
 
   logger(LOG_INFO, "CURL", "Fetching %s", wp_url);
   curl_easy_setopt(curl, CURLOPT_URL, wp_url);
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "wpllm/0.0.1");
+  curl_easy_setopt(
+      curl, CURLOPT_USERAGENT,
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+  struct curl_slist *headers = curl_slist_append(NULL, "Accept: application/json");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 
   CURLcode res = curl_easy_perform(curl);
+
+  long http_code = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
   curl_easy_cleanup(curl);
+  curl_slist_free_all(headers);
 
   if (res != CURLE_OK) {
     logger(LOG_ERROR, "CURL", "Request failed: %s", curl_easy_strerror(res));
+    free(chunk.data);
+    return "ERROR";
+  }
+
+  if (http_code < 200 || http_code >= 300) {
+    logger(LOG_ERROR, "CURL", "HTTP %ld (expected 2xx); response may not be JSON.",
+           http_code);
     free(chunk.data);
     return "ERROR";
   }
@@ -110,11 +133,30 @@ char *make_curl_request_posts(const char *url) {
   return make_curl_request_endpoint(url, "posts");
 }
 
-/* WP REST API uses the same schema for pages and posts (id, link, title.rendered, content.rendered). */
+/* WP REST API uses the same schema for pages and posts (id, link,
+ * title.rendered, content.rendered). */
 static cJSON *filter_wp_items(const char *raw_json) {
-  cJSON *root = cJSON_Parse(raw_json);
+  const char *parse_start = raw_json;
+  /* Skip UTF-8 BOM if present (some servers send it). */
+  if (raw_json && (unsigned char)raw_json[0] == 0xEF &&
+      (unsigned char)raw_json[1] == 0xBB && (unsigned char)raw_json[2] == 0xBF)
+    parse_start = raw_json + 3;
+
+  cJSON *root = cJSON_Parse(parse_start);
   if (!root) {
-    logger(LOG_ERROR, "PARSE", "Failed to parse JSON.");
+    const char *err = cJSON_GetErrorPtr();
+    if (err && *err)
+      logger(LOG_ERROR, "PARSE", "Failed to parse JSON (near: \"%.40s...\").",
+             err);
+    else
+      logger(LOG_ERROR, "PARSE", "Failed to parse JSON.");
+    return NULL;
+  }
+
+  if (!cJSON_IsArray(root)) {
+    logger(LOG_ERROR, "PARSE",
+           "Expected JSON array (e.g. API error or disabled REST).");
+    cJSON_Delete(root);
     return NULL;
   }
 
@@ -124,11 +166,11 @@ static cJSON *filter_wp_items(const char *raw_json) {
   cJSON_ArrayForEach(item, root) {
     /* Skip items whose title contains "copy" or "sample" (case-insensitive). */
     cJSON *title = cJSON_GetObjectItem(item, "title");
-    cJSON *title_rendered = title ? cJSON_GetObjectItem(title, "rendered") : NULL;
-    const char *title_str =
-        (title_rendered && cJSON_IsString(title_rendered))
-            ? title_rendered->valuestring
-            : "";
+    cJSON *title_rendered =
+        title ? cJSON_GetObjectItem(title, "rendered") : NULL;
+    const char *title_str = (title_rendered && cJSON_IsString(title_rendered))
+                                ? title_rendered->valuestring
+                                : "";
     if (contains_ignore_case(title_str, "copy") ||
         contains_ignore_case(title_str, "sample"))
       continue;
@@ -174,7 +216,8 @@ cJSON *filter_wp_posts(const char *raw_json) {
   return filter_wp_items(raw_json);
 }
 
-/* Merges two arrays of WP items into one (duplicates items; caller frees a and b). */
+/* Merges two arrays of WP items into one (duplicates items; caller frees a and
+ * b). */
 cJSON *merge_item_arrays(cJSON *a, cJSON *b) {
   cJSON *merged = cJSON_CreateArray();
   if (!merged) {
@@ -227,6 +270,11 @@ char *html_to_markdown(const char *html) {
     unlink(path);
     return NULL;
   }
+
+  /* Ensure markitdown (Python) reads the temp file as UTF-8 */
+  setenv("PYTHONUTF8", "1", 1); /* Python 3.7+ UTF-8 mode */
+  setenv("LC_ALL", "en_US.UTF-8", 1);
+  setenv("LANG", "en_US.UTF-8", 1);
 
   FILE *p = popen(cmd, "r");
   if (!p) {
