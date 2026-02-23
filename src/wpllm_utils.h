@@ -14,4 +14,6 @@ int is_url_valid(const char *url);
 
 cJSON *filter_wp_pages(const char *raw_json);
 
+void write_llm_file(const char *outpath, cJSON *items, int use_md);
+
 #endif

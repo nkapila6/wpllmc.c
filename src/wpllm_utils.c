@@ -128,3 +128,31 @@ cJSON *filter_wp_pages(const char *raw_json) {
   cJSON_Delete(root);
   return new;
 }
+
+void write_llm_file(const char *outpath, cJSON *items, int use_md) {
+  FILE *f = fopen(outpath, "w");
+  if (!f) {
+    fprintf(stderr, "Cannot open %s for writing\n", outpath);
+    return;
+  }
+  cJSON *item = NULL;
+  cJSON_ArrayForEach(item, items) {
+    cJSON *title = cJSON_GetObjectItem(item, "title");
+    cJSON *link = cJSON_GetObjectItem(item, "link");
+    cJSON *content = cJSON_GetObjectItem(item, "content");
+    const char *t = (title && cJSON_IsString(title)) ? title->valuestring : "";
+    const char *l = (link && cJSON_IsString(link)) ? link->valuestring : "";
+    const char *c = (content && cJSON_IsString(content)) ? content->valuestring : "";
+
+    if (use_md) {
+      fprintf(f, "## %s\n\n", t);
+      fprintf(f, "Link: %s\n\n", l);
+      fprintf(f, "%s\n\n", c);
+    } else {
+      fprintf(f, "TITLE: %s\n", t);
+      fprintf(f, "LINK: %s\n", l);
+      fprintf(f, "%s\n\n", c);
+    }
+  }
+  fclose(f);
+}
