@@ -235,7 +235,7 @@ cJSON *merge_item_arrays(cJSON *a, cJSON *b) {
   return merged;
 }
 
- // strip <script> and <div>
+ // strip <script>, <div>, and <p> (unwrap; keep inner content)
 static char *strip_divs_and_scripts(const char *html) {
   size_t len = strlen(html);
   char *out = malloc(len + 1);
@@ -267,6 +267,27 @@ static char *strip_divs_and_scripts(const char *html) {
     }
     if (i + 6 <= len && strncasecmp(html + i, "</div>", 6) == 0) {
       i += 6;
+      continue;
+    }
+    /* <p> or <p ...> */
+    if (i + 2 <= len && strncasecmp(html + i, "<p", 2) == 0 &&
+        (html[i + 2] == '>' || html[i + 2] == ' ' || html[i + 2] == '\t')) {
+      size_t j = i + 2;
+      while (j < len && html[j] != '>') {
+        if (html[j] == '"' || html[j] == '\'') {
+          char q = html[j++];
+          while (j < len && html[j] != q) j++;
+          if (j < len) j++;
+        } else
+          j++;
+      }
+      if (j < len) {
+        i = j + 1;
+        continue;
+      }
+    }
+    if (i + 4 <= len && strncasecmp(html + i, "</p>", 4) == 0) {
+      i += 4;
       continue;
     }
     out[o++] = html[i++];
@@ -311,11 +332,20 @@ char *html_to_markdown(const char *html) {
     return NULL;
   }
 
+  /* Rename to .html so markitdown uses HTML converter (and UTF-8). */
+  char path_html[64];
+  int nh = snprintf(path_html, sizeof(path_html), "%s.html", path);
+  if (nh < 0 || nh >= (int)sizeof(path_html) || rename(path, path_html) != 0) {
+    logger(LOG_ERROR, "MARKDOWN", "Failed to rename temp file to .html.");
+    unlink(path);
+    return NULL;
+  }
+
   char cmd[320];
-  int nc = snprintf(cmd, sizeof(cmd), "%s \"%s\"", MARKITDOWN_CMD, path);
+  int nc = snprintf(cmd, sizeof(cmd), "%s \"%s\"", MARKITDOWN_CMD, path_html);
   if (nc < 0 || (size_t)nc >= sizeof(cmd)) {
     logger(LOG_ERROR, "MARKDOWN", "Temp path too long for markitdown command.");
-    unlink(path);
+    unlink(path_html);
     return NULL;
   }
 
@@ -327,7 +357,7 @@ char *html_to_markdown(const char *html) {
   FILE *p = popen(cmd, "r");
   if (!p) {
     logger(LOG_ERROR, "MARKDOWN", "popen(%s) failed.", MARKITDOWN_CMD);
-    unlink(path);
+    unlink(path_html);
     return NULL;
   }
 
@@ -351,7 +381,7 @@ char *html_to_markdown(const char *html) {
     outlen += n;
   }
   pclose(p);
-  unlink(path);
+  unlink(path_html);
 
   if (!out)
     out = strdup("");
