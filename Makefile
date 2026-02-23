@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -I$(SRC_DIR)
+CFLAGS = -Wall -Wextra -I$(SRC_DIR) -DCJSON_NESTING_LIMIT=10000
 LIBS = -lcurl
 
 # dirs
