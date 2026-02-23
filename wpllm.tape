@@ -64,12 +64,19 @@ Set FontSize 24
 Set Width 1400
 Set Height 800
 
-Type "make" Enter
+Type "make" Enter 
+Sleep 2s
 
 Type "./wpllm -u https://techcrunch.com -v" Enter
 # Give the script time to work! Adjust this based on how long wpllm takes.
 Sleep 20s 
 
-Type "bat llm.md" Enter Enter Enter
-Sleep 5s
-Type "q" Enter
+Type "bat llm.md" Enter
+Sleep 2s
+
+Down 15
+PageDown 3
+Sleep 3s
+  
+Type "q"
+Sleep 1s
