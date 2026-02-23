@@ -26,6 +26,7 @@ int main(int argc, char *argv[]) {
   bool pages = false, blogs = false;
 
   if (argc < 2) {
+    logger(LOG_INFO, "MAIN", "No arguments; showing usage.");
     fprintf(stderr, "%s", USAGE);
     return EXIT_SUCCESS;
   }
@@ -50,18 +51,19 @@ int main(int argc, char *argv[]) {
       break;
 
     default: // considering h will fall here too.
+      logger(LOG_INFO, "MAIN", "Showing usage.");
       fprintf(stderr, "%s", USAGE);
       return EXIT_SUCCESS;
     }
   }
 
   if ((url == NULL) || (is_url_valid(url) == 0)) {
-    fprintf(stderr, "The URL %s is invalid, kindly follow usage below:\n%s",
-            url, USAGE);
+    logger(LOG_ERROR, "INPUT", "Invalid URL: %s", url ? url : "(null)");
+    fprintf(stderr, "%s", USAGE);
     return EXIT_FAILURE;
   }
 
-  printf("Welcome to wpllm.c!\n");
+  logger(LOG_INFO, "MAIN", "Welcome to wpllm.c!");
 
   logger(LOG_INFO, "INPUT", "URL entered is %s", url);
   bool both = (pages == blogs); /* neither or both => both */
@@ -143,6 +145,6 @@ int main(int argc, char *argv[]) {
 
   write_llm_file("llm.md", json);
   cJSON_Delete(json);
-  printf("Wrote llm.md\n");
+  logger(LOG_INFO, "OUTPUT", "Wrote llm.md");
   return EXIT_SUCCESS;
 }

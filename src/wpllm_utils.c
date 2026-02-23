@@ -42,8 +42,10 @@ size_t writer(void *contents, size_t size, size_t nmemb, void *userp) {
   // cast back to struct
   struct Response *resp = (struct Response *)userp;
   char *ptr = realloc(resp->data, resp->size + realsize + 1);
-  if (!ptr)
+  if (!ptr) {
+    logger(LOG_ERROR, "CURL", "realloc failed in response writer.");
     return 0;
+  }
 
   resp->data = ptr;
   memcpy(&(resp->data[resp->size]), contents, realsize);
@@ -111,8 +113,10 @@ char *make_curl_request_posts(const char *url) {
 /* WP REST API uses the same schema for pages and posts (id, link, title.rendered, content.rendered). */
 static cJSON *filter_wp_items(const char *raw_json) {
   cJSON *root = cJSON_Parse(raw_json);
-  if (!root)
+  if (!root) {
+    logger(LOG_ERROR, "PARSE", "Failed to parse JSON.");
     return NULL;
+  }
 
   cJSON *new = cJSON_CreateArray();
 
@@ -173,8 +177,10 @@ cJSON *filter_wp_posts(const char *raw_json) {
 /* Merges two arrays of WP items into one (duplicates items; caller frees a and b). */
 cJSON *merge_item_arrays(cJSON *a, cJSON *b) {
   cJSON *merged = cJSON_CreateArray();
-  if (!merged)
+  if (!merged) {
+    logger(LOG_ERROR, "PARSE", "Failed to allocate merged array.");
     return NULL;
+  }
   cJSON *item = NULL;
   cJSON_ArrayForEach(item, a) {
     cJSON_AddItemToArray(merged, cJSON_Duplicate(item, 1));
@@ -194,8 +200,10 @@ char *html_to_markdown(const char *html) {
   path[sizeof(path) - 1] = '\0';
 
   int fd = mkstemp(path);
-  if (fd < 0)
+  if (fd < 0) {
+    logger(LOG_ERROR, "MARKDOWN", "mkstemp failed for temp file.");
     return NULL;
+  }
 
   size_t len = strlen(html);
   size_t written = 0;
@@ -207,6 +215,7 @@ char *html_to_markdown(const char *html) {
   }
   close(fd);
   if (written != len) {
+    logger(LOG_ERROR, "MARKDOWN", "Failed to write temp file.");
     unlink(path);
     return NULL;
   }
@@ -214,13 +223,14 @@ char *html_to_markdown(const char *html) {
   char cmd[320];
   int nc = snprintf(cmd, sizeof(cmd), "%s \"%s\"", MARKITDOWN_CMD, path);
   if (nc < 0 || (size_t)nc >= sizeof(cmd)) {
+    logger(LOG_ERROR, "MARKDOWN", "Temp path too long for markitdown command.");
     unlink(path);
     return NULL;
   }
 
-  
   FILE *p = popen(cmd, "r");
   if (!p) {
+    logger(LOG_ERROR, "MARKDOWN", "popen(%s) failed.", MARKITDOWN_CMD);
     unlink(path);
     return NULL;
   }
@@ -255,9 +265,11 @@ char *html_to_markdown(const char *html) {
 void write_llm_file(const char *outpath, cJSON *items) {
   FILE *f = fopen(outpath, "w");
   if (!f) {
-    fprintf(stderr, "Cannot open %s for writing\n", outpath);
+    logger(LOG_ERROR, "OUTPUT", "Cannot open %s for writing.", outpath);
     return;
   }
+  size_t count = cJSON_GetArraySize(items);
+  logger(LOG_INFO, "OUTPUT", "Writing %zu items to %s", count, outpath);
   cJSON *item = NULL;
   cJSON_ArrayForEach(item, items) {
     cJSON *title = cJSON_GetObjectItem(item, "title");
