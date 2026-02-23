@@ -27,7 +27,7 @@ static int contains_ignore_case(const char *haystack, const char *needle) {
   return 0;
 }
 
-#define TMP_TEMPLATE "/tmp/wpllm_markitdown_XXXXXX.html"
+#define TMP_TEMPLATE "/tmp/wpllm_markitdown_XXXXXX"
 #define MARKITDOWN_CMD "markitdown"
 #define READ_CHUNK 4096
 

@@ -1,13 +1,13 @@
 # wpllm.c
 
-A C program that generates llm.txt or llm.md for any Wordpress site. Purely human written. :)
-Meant to be used as an extension for my `wp-content-engine` agent that will invoke this tool via a ctypes wrapper.
+A C program that generates llm.md for any Wordpress site. Purely human written. :)
+Meant to be used as an extension for my `wp-content-engine` agent that will invoke this tool via a ctypes wrapper (or CLI..?)
 
 Written and built on a M1 Pro.
 
 ## Overall flow
 
-The C binary will take command line arguments of the URL, posts or pages, output as llms.txt or llms.md.
+The C binary will take command line arguments of the URL, posts or pages, output as llm.md.
 
 ## Dependencies
 
